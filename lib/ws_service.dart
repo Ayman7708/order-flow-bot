@@ -71,9 +71,13 @@ class WsService {
   void _onMessage(dynamic data) {
     try {
       final raw = data is String ? data : utf8.decode(data);
+      debugPrint('WS RAW: ${raw.substring(0, raw.length > 200 ? 200 : raw.length)}');
       final json = jsonDecode(raw) as Map<String, dynamic>;
       final d = json['data'] as Map<String, dynamic>?;
-      if (d == null) return;
+      if (d == null) {
+        debugPrint('No data field');
+        return;
+      }
 
       final symbol = (d['s'] as String?) ?? '';
       if (symbol.isEmpty) return;

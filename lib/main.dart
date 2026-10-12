@@ -20,10 +20,10 @@ const List<String> WATCH = [
   'MATICUSDT', 'NEARUSDT', 'APTUSDT', 'ARBUSDT', 'OPUSDT',
 ];
 
-const int LEVERAGE = 5;
+const int LEVERAGE = 7;
 const double RISK_PCT = 0.01;
-const int LOOP_MS = 3000; // check every 3 sec
-const int MAX_POS_PER_SYMBOL = 3;
+const int LOOP_MS = 2000; // check every 3 sec
+const int MAX_POS_PER_SYMBOL = 5;
 
 class FlowApp extends StatelessWidget {
   const FlowApp({super.key});
@@ -51,7 +51,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late TabController _tabs;
   final _ws = WsService();
-  final _detector = WhaleDetector(windowSeconds: 10, whaleThreshold: 50000);
+  final _detector = WhaleDetector(windowSeconds: 8, whaleThreshold: 20000);
   final _learn = LearningEngine();
 
   double _balance = 1000;
@@ -147,7 +147,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     _detector.addEvent(e);
     _prices[e.symbol] = e.price;
     _totalTicks++;
-    if (e.value > 50000) _totalWhales++;
+    if (e.value > 20000) _totalWhales++;
   }
 
   void _toggleBot() {
