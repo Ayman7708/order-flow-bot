@@ -1,0 +1,23 @@
+name: order_flow_bot
+description: Order Flow Whale Tracker Bot
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  web_socket_channel: 2.4.5
+  http: 1.2.2
+  shared_preferences: 2.2.3
+  flutter_local_notifications: 17.2.2
+  wakelock_plus: 1.2.5
+  cupertino_icons: 1.0.6
+
+dependency_overrides:
+  package_info_plus: 8.0.0
+
+flutter:
+  uses-material-design: true
