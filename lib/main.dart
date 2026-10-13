@@ -20,10 +20,11 @@ const List<String> WATCH = [
   'MATICUSDT', 'NEARUSDT', 'APTUSDT', 'ARBUSDT', 'OPUSDT',
 ];
 
-const int LEVERAGE = 7;
-const double RISK_PCT = 0.01;
+const int LEVERAGE = 20;
+const double MAX_TOTAL_MARGIN_PCT = 0.25; // max 25% of balance in open margins
+const double RISK_PCT = 0.003;
 const int LOOP_MS = 2000; // check every 3 sec
-const int MAX_POS_PER_SYMBOL = 5;
+const int MAX_POS_PER_SYMBOL = 2;
 
 class FlowApp extends StatelessWidget {
   const FlowApp({super.key});
@@ -217,7 +218,26 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     }
   }
 
+  double get _totalMarginLocked {
+    double t = 0;
+    for (final list in _positions.values) {
+      for (final p in list) t += p.margin;
+    }
+    return t;
+  }
+
+  bool get _hasRoomForMore {
+    if (_initialBalance <= 0) return false;
+    final totalExposure = _totalMarginLocked + _balance;
+    if (totalExposure <= 0) return false;
+    final marginPct = _totalMarginLocked / (_totalMarginLocked + _balance);
+    return marginPct < MAX_TOTAL_MARGIN_PCT;
+  }
+
   void _lookForEntries() {
+    // Stop opening if total margin > MAX_TOTAL_MARGIN_PCT
+    if (!_hasRoomForMore) return;
+
     for (final sym in WATCH) {
       final snap = _snapshots[sym];
       if (snap == null) continue;
@@ -260,6 +280,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       if (margin <= 0 || margin > _balance) continue;
 
       _openPosition(sym, sig, margin, snap);
+      // Check again after opening
+      if (!_hasRoomForMore) break;
     }
   }
 
@@ -291,6 +313,39 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     Notifications.show(
       sig.direction == 'LONG' ? '🟢 شراء $sym' : '🔴 بيع $sym',
       'قوة: ${sig.finalScore} | ${sig.reason}',
+    );
+  }
+
+  void _closeAll() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF131A26),
+        title: const Text('إغلاق كل الصفقات', style: TextStyle(color: Colors.white)),
+        content: Text('سيتم إغلاق ${_positions.values.fold<int>(0, (s, l) => s + l.length)} صفقة. متأكد؟',
+            style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() {
+                for (final sym in _positions.keys.toList()) {
+                  final list = _positions[sym]!;
+                  final price = _prices[sym] ?? 0;
+                  for (final p in list) {
+                    final pnl = price > 0 ? p.pnl(price) : 0.0;
+                    _balance += p.margin + pnl;
+                  }
+                  _positions.remove(sym);
+                }
+              });
+              _saveState();
+            },
+            child: const Text('نعم', style: TextStyle(color: Color(0xFFEF4444))),
+          ),
+        ],
+      ),
     );
   }
 
@@ -357,6 +412,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         elevation: 0,
         title: const Text('Order Flow Bot', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.close_fullscreen, color: Color(0xFFF59E0B)),
+            onPressed: _closeAll,
+            tooltip: 'إغلاق الكل',
+          ),
           IconButton(
             icon: const Icon(Icons.restart_alt, color: Color(0xFFEF4444)),
             onPressed: _resetAll,

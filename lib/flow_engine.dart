@@ -102,7 +102,7 @@ class FlowEngine {
     if (slDistPct < 0.0005) return 0;
     final posValue = riskUsdt / slDistPct;
     final margin = posValue / leverage;
-    final maxMargin = balance * 0.15;
+    final maxMargin = balance * 0.03;
     return margin > maxMargin ? maxMargin : margin;
   }
 }
