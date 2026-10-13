@@ -1,19 +1,13 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-/// This function runs in a SEPARATE isolate (background)
-/// It must be a TOP-LEVEL function with @pragma
+/// Background isolate entry point
 @pragma('vm:entry-point')
 void onBackgroundStart(ServiceInstance service) async {
-  // Required for isolate
-  DartPluginRegistrant.ensureInitialized();
-
-  final notif = FlutterLocalNotificationsPlugin();
-  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-  const initSettings = InitializationSettings(android: androidInit);
-  await notif.initialize(initSettings);
+  // Required for plugins in background isolate
+  WidgetsFlutterBinding.ensureInitialized();
 
   if (service is AndroidServiceInstance) {
     service.on('setAsForeground').listen((event) {
@@ -22,63 +16,73 @@ void onBackgroundStart(ServiceInstance service) async {
     service.on('setAsBackground').listen((event) {
       service.setAsBackgroundService();
     });
-    service.on('stopService').listen((event) {
-      service.stopSelf();
-    });
-    // Start as foreground service immediately
-    await service.setAsForegroundService();
   }
 
-  // Heartbeat every 30 seconds to keep service alive
+  service.on('stopService').listen((event) {
+    service.stopSelf();
+  });
+
+  // Heartbeat every 30 seconds
   Timer.periodic(const Duration(seconds: 30), (timer) async {
     if (service is AndroidServiceInstance) {
       final now = DateTime.now();
-      final timeStr = '${now.hour}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
-      await service.setForegroundNotificationInfo(
-        title: 'بوت الأوردر فلو يعمل',
-        content: 'المراقبة جارية • آخر تحديث: $timeStr',
-      );
+      final timeStr = '${now.hour}:${now.minute.toString().padLeft(2, '0')}';
+      try {
+        await service.setForegroundNotificationInfo(
+          title: 'بوت الأوردر فلو يعمل',
+          content: 'المراقبة جارية • $timeStr',
+        );
+      } catch (_) {}
     }
     service.invoke('heartbeat', {'ts': DateTime.now().millisecondsSinceEpoch});
   });
 }
 
-/// Configure the service
 Future<void> initBackgroundService() async {
   final service = FlutterBackgroundService();
-  await service.configure(
-    androidConfiguration: AndroidConfiguration(
-      onStart: onBackgroundStart,
-      autoStart: false,
-      isForegroundMode: true,
-      notificationChannelId: 'order_flow_channel',
-      initialNotificationTitle: 'بوت الأوردر فلو',
-      initialNotificationContent: 'جاري التشغيل...',
-      foregroundServiceNotificationId: 777,
-      autoStartOnBoot: true,
-      foregroundServiceTypes: [
-        AndroidForegroundType.dataSync,
-      ],
-    ),
-    iosConfiguration: IosConfiguration(
-      autoStart: false,
-      onForeground: onBackgroundStart,
-      onBackground: (service) => true,
-    ),
-  );
+  try {
+    await service.configure(
+      androidConfiguration: AndroidConfiguration(
+        onStart: onBackgroundStart,
+        autoStart: false,
+        isForegroundMode: true,
+        notificationChannelId: 'order_flow_channel',
+        initialNotificationTitle: 'بوت الأوردر فلو',
+        initialNotificationContent: 'جاري التشغيل...',
+        foregroundServiceNotificationId: 777,
+        foregroundServiceTypes: [
+          AndroidForegroundType.dataSync,
+        ],
+      ),
+      iosConfiguration: IosConfiguration(
+        autoStart: false,
+        onForeground: onBackgroundStart,
+      ),
+    );
+  } catch (e) {
+    debugPrint('BG service init error: $e');
+  }
 }
 
 Future<void> startBgService() async {
-  final service = FlutterBackgroundService();
-  final isRunning = await service.isRunning();
-  if (!isRunning) {
-    await service.startService();
+  try {
+    final service = FlutterBackgroundService();
+    final isRunning = await service.isRunning();
+    if (!isRunning) {
+      await service.startService();
+    }
+    service.invoke('setAsForeground');
+  } catch (e) {
+    debugPrint('BG service start error: $e');
   }
-  service.invoke('setAsForeground');
 }
 
 Future<void> stopBgService() async {
-  final service = FlutterBackgroundService();
-  service.invoke('stopService');
-  await Future.delayed(const Duration(milliseconds: 500));
+  try {
+    final service = FlutterBackgroundService();
+    service.invoke('stopService');
+    await Future.delayed(const Duration(milliseconds: 500));
+  } catch (e) {
+    debugPrint('BG service stop error: $e');
+  }
 }
