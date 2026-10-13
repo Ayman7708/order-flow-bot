@@ -1,7 +1,7 @@
 name: order_flow_bot
 description: Order Flow Whale Tracker Bot
 publish_to: 'none'
-version: 2.0.1+6
+version: 2.0.2+7
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

@@ -77,13 +77,20 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
+    try {
+      _safeInit();
+    } catch (e) {
+      debugPrint('Init error: $e');
+      _loaded = true;
+    }
+  }
+
+  void _safeInit() {
     WidgetsBinding.instance.addObserver(this);
     _tabs = TabController(length: 3, vsync: this);
     _loadState();
     _ws.stream.listen(_onEvent);
     _startTime = DateTime.now();
-    // Init background service
-    initBackgroundService();
     // Listen to connectivity
     _connSub = Connectivity().onConnectivityChanged.listen((results) {
       final has = results.any((r) => r != ConnectivityResult.none);
@@ -193,7 +200,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     } else {
       setState(() => _running = true);
       WakelockPlus.enable();
-      await startBgService();
+      // Init and start background service (only when user presses start)
+      try {
+        await initBackgroundService();
+        await Future.delayed(const Duration(milliseconds: 300));
+        await startBgService();
+      } catch (e) {
+        debugPrint('BG service start error: $e');
+      }
       _ws.connect(WATCH);
       _loop = Timer.periodic(const Duration(milliseconds: LOOP_MS), (_) => _tick());
       Notifications.show('▶ بدء البوت', 'يعمل الآن في الخلفية 24/7');
