@@ -32,29 +32,13 @@ jobs:
           cp -r /tmp/scaffold/android .
           cp /tmp/scaffold/.metadata . || true
 
-      - name: Patch AndroidManifest
+      - name: Add permissions
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
-          cp "$MANIFEST" /tmp/manifest_before.txt
-          
-          # 1. Add permissions before <application
           sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/><application|' "$MANIFEST"
           sed -i 's|<application|<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/><application|' "$MANIFEST"
           sed -i 's|<application|<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/><application|' "$MANIFEST"
           sed -i 's|<application|<uses-permission android:name="android.permission.WAKE_LOCK"/><application|' "$MANIFEST"
-          sed -i 's|<application|<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/><application|' "$MANIFEST"
-          sed -i 's|<application|<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/><application|' "$MANIFEST"
-          sed -i 's|<application|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/><application|' "$MANIFEST"
-          sed -i 's|<application|<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/><application|' "$MANIFEST"
-
-          # NOTE: The library flutter_background_service_android auto-registers
-          # its <service> declaration via its own AndroidManifest. We do NOT
-          # add it here to avoid duplicate declaration errors.
-          
-          echo "===== Manifest changes ====="
-          diff /tmp/manifest_before.txt "$MANIFEST" || true
-          echo "===== Final manifest ====="
-          cat "$MANIFEST"
 
       - name: Decode keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/cryptobot.jks

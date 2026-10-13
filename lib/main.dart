@@ -6,8 +6,6 @@ import 'learning_engine.dart';
 import 'services.dart';
 import 'trade_manager.dart';
 import 'whale_detector.dart';
-import 'bg_service.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'ws_service.dart';
 
 void main() {
@@ -67,8 +65,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   final Map<String, FlowSnapshot> _snapshots = {};
   final Map<String, double> _prices = {};
 
-  bool _hasInternet = true;
-  StreamSubscription? _connSub;
   int _totalTicks = 0;
   int _totalWhales = 0;
   DateTime _startTime = DateTime.now();
@@ -91,26 +87,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     _loadState();
     _ws.stream.listen(_onEvent);
     _startTime = DateTime.now();
-    // Listen to connectivity
-    _connSub = Connectivity().onConnectivityChanged.listen((results) {
-      final has = results.any((r) => r != ConnectivityResult.none);
-      if (has != _hasInternet) {
-        setState(() => _hasInternet = has);
-        if (has && _running) {
-          // Reconnect when internet is back
-          _ws.connect(WATCH);
-        }
-        Notifications.show(
-          has ? '🌐 عاد الإنترنت' : '📵 انقطع الإنترنت',
-          has ? 'البوت استأنف العمل' : 'البوت ينتظر الاتصال',
-        );
       }
-    });
-  }
 
   @override
   void dispose() {
-    _connSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _loop?.cancel();
     _ws.dispose();
@@ -195,19 +175,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       _ws.disconnect();
       setState(() => _running = false);
       WakelockPlus.disable();
-      await stopBgService();
-      Notifications.show('⏹ إيقاف البوت', 'توقف التداول');
+            Notifications.show('⏹ إيقاف البوت', 'توقف التداول');
     } else {
       setState(() => _running = true);
       WakelockPlus.enable();
-      // Init and start background service (only when user presses start)
-      try {
-        await initBackgroundService();
-        await Future.delayed(const Duration(milliseconds: 300));
-        await startBgService();
-      } catch (e) {
-        debugPrint('BG service start error: $e');
-      }
+      
       _ws.connect(WATCH);
       _loop = Timer.periodic(const Duration(milliseconds: LOOP_MS), (_) => _tick());
       Notifications.show('▶ بدء البوت', 'يعمل الآن في الخلفية 24/7');
