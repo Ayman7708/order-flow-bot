@@ -32,13 +32,41 @@ jobs:
           cp -r /tmp/scaffold/android .
           cp /tmp/scaffold/.metadata . || true
 
-      - name: Add permissions
+      - name: Add permissions and service declaration
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
-          sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/><application|' "$MANIFEST"
-          sed -i 's|<application|<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/><application|' "$MANIFEST"
-          sed -i 's|<application|<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/><application|' "$MANIFEST"
-          sed -i 's|<application|<uses-permission android:name="android.permission.WAKE_LOCK"/><application|' "$MANIFEST"
+          
+          # Add all permissions before <application>
+          sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>\n    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>\n    <application|' "$MANIFEST"
+          
+          # Add service declaration INSIDE <application>
+          # Find closing of application tag and insert service before it
+          python3 -c "
+import re
+with open('$MANIFEST', 'r') as f:
+    content = f.read()
+
+service_block = '''
+        <service
+            android:name=\"id.flutter.flutter_background_service.BackgroundService\"
+            android:foregroundServiceType=\"dataSync\"
+            android:exported=\"false\"
+            android:stopWithTask=\"false\" />
+        <service
+            android:name=\"com.tekartik.sqflite.SqflitePlugin\"
+            android:exported=\"false\" />
+'''
+
+# Insert before </application>
+content = content.replace('</application>', service_block + '</application>')
+
+with open('$MANIFEST', 'w') as f:
+    f.write(content)
+print('Service declaration added')
+"
+          
+          echo "=== Final manifest ==="
+          cat "$MANIFEST"
 
       - name: Decode keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/cryptobot.jks

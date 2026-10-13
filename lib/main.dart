@@ -6,6 +6,8 @@ import 'learning_engine.dart';
 import 'services.dart';
 import 'trade_manager.dart';
 import 'whale_detector.dart';
+import 'bg_service.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'ws_service.dart';
 
 void main() {
@@ -65,6 +67,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   final Map<String, FlowSnapshot> _snapshots = {};
   final Map<String, double> _prices = {};
 
+  bool _hasInternet = true;
+  StreamSubscription? _connSub;
   int _totalTicks = 0;
   int _totalWhales = 0;
   DateTime _startTime = DateTime.now();
@@ -78,11 +82,28 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     _loadState();
     _ws.stream.listen(_onEvent);
     _startTime = DateTime.now();
+    // Init background service
+    initBackgroundService();
+    // Listen to connectivity
+    _connSub = Connectivity().onConnectivityChanged.listen((results) {
+      final has = results.any((r) => r != ConnectivityResult.none);
+      if (has != _hasInternet) {
+        setState(() => _hasInternet = has);
+        if (has && _running) {
+          // Reconnect when internet is back
+          _ws.connect(WATCH);
+        }
+        Notifications.show(
+          has ? '🌐 عاد الإنترنت' : '📵 انقطع الإنترنت',
+          has ? 'البوت استأنف العمل' : 'البوت ينتظر الاتصال',
+        );
+      }
+    });
   }
 
   @override
   void dispose() {
-    WakelockPlus.disable();
+    _connSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _loop?.cancel();
     _ws.dispose();
@@ -127,6 +148,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       }
     } catch (_) {}
     if (mounted) setState(() => _loaded = true);
+    // Auto-restart if was running before
+    try {
+      final data = await Store.load();
+      if (data != null && data['wasRunning'] == true) {
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted && !_running) _toggleBot();
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _saveState() async {
@@ -140,6 +170,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         'trades': _trades.map((t) => t.toJson()).toList(),
         'learning': _learn.toJson(),
         'totalWhales': _totalWhales,
+        'wasRunning': _running,
       });
     } catch (_) {}
   }
@@ -151,17 +182,21 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     if (e.value > 20000) _totalWhales++;
   }
 
-  void _toggleBot() {
+  Future<void> _toggleBot() async {
     if (_running) {
       _loop?.cancel();
       _ws.disconnect();
       setState(() => _running = false);
       WakelockPlus.disable();
+      await stopBgService();
+      Notifications.show('⏹ إيقاف البوت', 'توقف التداول');
     } else {
       setState(() => _running = true);
       WakelockPlus.enable();
+      await startBgService();
       _ws.connect(WATCH);
       _loop = Timer.periodic(const Duration(milliseconds: LOOP_MS), (_) => _tick());
+      Notifications.show('▶ بدء البوت', 'يعمل الآن في الخلفية 24/7');
     }
   }
 
