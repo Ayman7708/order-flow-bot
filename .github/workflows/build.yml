@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Java 17
@@ -32,40 +32,28 @@ jobs:
           cp -r /tmp/scaffold/android .
           cp /tmp/scaffold/.metadata . || true
 
-      - name: Add permissions and service declaration
+      - name: Patch AndroidManifest
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
+          cp "$MANIFEST" /tmp/manifest_before.txt
           
-          # Add all permissions before <application>
-          sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>\n    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>\n    <application|' "$MANIFEST"
+          # 1. Add permissions before <application
+          sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET"/><application|' "$MANIFEST"
+          sed -i 's|<application|<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/><application|' "$MANIFEST"
+          sed -i 's|<application|<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/><application|' "$MANIFEST"
+          sed -i 's|<application|<uses-permission android:name="android.permission.WAKE_LOCK"/><application|' "$MANIFEST"
+          sed -i 's|<application|<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/><application|' "$MANIFEST"
+          sed -i 's|<application|<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/><application|' "$MANIFEST"
+          sed -i 's|<application|<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/><application|' "$MANIFEST"
+          sed -i 's|<application|<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/><application|' "$MANIFEST"
+
+          # 2. Add background service inside <application
+          # Replace closing </application> with service + closing
+          sed -i 's|</application>|<service android:name="id.flutter.flutter_background_service.BackgroundService" android:foregroundServiceType="dataSync" android:exported="false" android:stopWithTask="false" /></application>|' "$MANIFEST"
           
-          # Add service declaration INSIDE <application>
-          # Find closing of application tag and insert service before it
-          python3 -c "
-import re
-with open('$MANIFEST', 'r') as f:
-    content = f.read()
-
-service_block = '''
-        <service
-            android:name=\"id.flutter.flutter_background_service.BackgroundService\"
-            android:foregroundServiceType=\"dataSync\"
-            android:exported=\"false\"
-            android:stopWithTask=\"false\" />
-        <service
-            android:name=\"com.tekartik.sqflite.SqflitePlugin\"
-            android:exported=\"false\" />
-'''
-
-# Insert before </application>
-content = content.replace('</application>', service_block + '</application>')
-
-with open('$MANIFEST', 'w') as f:
-    f.write(content)
-print('Service declaration added')
-"
-          
-          echo "=== Final manifest ==="
+          echo "===== Manifest changes ====="
+          diff /tmp/manifest_before.txt "$MANIFEST" || true
+          echo "===== Final manifest ====="
           cat "$MANIFEST"
 
       - name: Decode keystore
@@ -73,7 +61,7 @@ print('Service declaration added')
 
       - name: Create key.properties
         run: |
-          cat > android/key.properties << KEYEOF
+          cat > android/key.properties << 'KEYEOF'
           storePassword=${{ secrets.KEYSTORE_PASSWORD }}
           keyPassword=${{ secrets.KEY_PASSWORD }}
           keyAlias=${{ secrets.KEY_ALIAS }}
@@ -151,7 +139,7 @@ print('Service declaration added')
           PUB_CACHE=$(flutter pub cache dir 2>/dev/null || echo "$HOME/.pub-cache")
           COUNT=0
           for f in $PUB_CACHE/hosted/pub.dev/*/android/build.gradle; do
-            if [ -f "$f" ] && grep -q "flutter.compileSdkVersion\|flutter.minSdkVersion\|flutter.targetSdkVersion" "$f"; then
+            if [ -f "$f" ] && grep -q "flutter.compileSdkVersion" "$f"; then
               sed -i 's/flutter\.compileSdkVersion/34/g' "$f"
               sed -i 's/flutter\.minSdkVersion/21/g' "$f"
               sed -i 's/flutter\.targetSdkVersion/34/g' "$f"
